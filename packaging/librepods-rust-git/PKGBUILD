@@ -1,0 +1,38 @@
+# Maintainer of the AUR recipe this copies: Mingxun Hua
+# Built from the IamM47Z fork; paru prefers this over the AUR package.
+pkgname=librepods-rust-git
+pkgver=r527.672e65ad
+pkgrel=1
+pkgdesc="Apple exclusive AirPods Pro features for Linux (Rust Rewrite Branch)"
+arch=('x86_64')
+url="https://github.com/kavishdevar/librepods"
+license=('AGPL-3.0-or-later')
+depends=('bluez' 'libpulse' 'dbus' 'gcc-libs' 'glibc' 'hicolor-icon-theme')
+makedepends=('git' 'rust' 'cargo')
+provides=('librepods')
+conflicts=('librepods' 'librepods-git')
+source=("git+https://github.com/IamM47Z/librepods.git#branch=fix/a2dp-profile-recovery")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "librepods"
+  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "librepods/linux-rust"
+  cargo build --release --locked
+}
+
+package() {
+  cd "librepods/linux-rust"
+
+  # Install the main application binary
+  install -Dm755 "target/release/librepods" "$pkgdir/usr/bin/librepods"
+
+  # Install the desktop shortcut
+  install -Dm644 "assets/me.kavishdevar.librepods.desktop" "$pkgdir/usr/share/applications/me.kavishdevar.librepods.desktop"
+
+  # Install the app icon
+  install -Dm644 "assets/icon.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/me.kavishdevar.librepods.png"
+}
