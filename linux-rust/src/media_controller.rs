@@ -29,6 +29,7 @@ struct OwnedCardInfo {
     index: u32,
     proplist: Proplist,
     profiles: Vec<OwnedCardProfileInfo>,
+    active_profile: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -310,35 +311,27 @@ impl MediaController {
             return;
         }
 
-        let device_index = state.device_index;
         let mac = state.connected_device_mac.clone();
         drop(state);
 
-        let mut current_device_index = device_index;
+        // The card index changes whenever the card is re-created (codec switch
+        // failure, WirePlumber restart), so never trust a cached one.
+        let device_index = self.get_audio_device_index(&mac).await;
+        self.state.lock().await.device_index = device_index;
+        let Some(idx) = device_index else {
+            warn!("Could not get device index. Cannot activate A2DP profile.");
+            return;
+        };
 
-        if current_device_index.is_none() {
-            warn!("Device index not found, trying to get it.");
-            current_device_index = self.get_audio_device_index(&mac).await;
-            if let Some(idx) = current_device_index {
-                self.state.lock().await.device_index = Some(idx);
-            } else {
-                warn!("Could not get device index. Cannot activate A2DP profile.");
-                return;
-            }
+        if is_a2dp_profile(get_active_profile(idx).await.as_deref()) {
+            info!("A2DP profile already active, leaving the codec alone");
+            return;
         }
 
         if !self.is_a2dp_profile_available().await {
             warn!("A2DP profile not available, attempting to restart WirePlumber");
             if self.restart_wire_plumber().await {
-                let mut state = self.state.lock().await;
-                state.device_index = self
-                    .get_audio_device_index(&state.connected_device_mac)
-                    .await;
-                debug!(
-                    "Updated device_index after WirePlumber restart: {:?}",
-                    state.device_index
-                );
-                if !self.is_a2dp_profile_available().await {
+                if !self.wait_for_a2dp_card(&mac).await {
                     error!("A2DP profile still not available after WirePlumber restart");
                     return;
                 }
@@ -564,7 +557,7 @@ impl MediaController {
             return cached_profile;
         }
 
-        for profile in ["a2dp-sink-sbc_xq", "a2dp-sink-sbc", "a2dp-sink"] {
+        for profile in ["a2dp-sink", "a2dp-sink-sbc_xq", "a2dp-sink-sbc"] {
             if self.is_profile_available(index, profile).await {
                 info!("Selected best available A2DP profile: {}", profile);
                 self.state.lock().await.cached_a2dp_profile = profile.to_string();
@@ -603,7 +596,6 @@ impl MediaController {
         match result {
             Ok(output) if output.status.success() => {
                 info!("WirePlumber restarted successfully");
-                tokio::time::sleep(Duration::from_secs(2)).await;
                 true
             }
             _ => {
@@ -611,6 +603,19 @@ impl MediaController {
                 false
             }
         }
+    }
+
+    /// The card comes back some time after WirePlumber restarts; poll for it.
+    async fn wait_for_a2dp_card(&self, mac: &str) -> bool {
+        for _ in 0..20 {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let index = self.get_audio_device_index(mac).await;
+            self.state.lock().await.device_index = index;
+            if index.is_some() && self.is_a2dp_profile_available().await {
+                return true;
+            }
+        }
+        false
     }
 
     async fn get_audio_device_index(&self, mac: &str) -> Option<u32> {
@@ -639,11 +644,9 @@ impl MediaController {
         debug!("Entering deactivate_a2dp_profile");
         let mut state = self.state.lock().await;
 
-        if state.device_index.is_none() {
-            state.device_index = self
-                .get_audio_device_index(&state.connected_device_mac)
-                .await;
-        }
+        state.device_index = self
+            .get_audio_device_index(&state.connected_device_mac)
+            .await;
 
         if state.connected_device_mac.is_empty() || state.device_index.is_none() {
             warn!("Connected device MAC or index is empty, cannot deactivate A2DP profile");
@@ -924,6 +927,10 @@ fn get_card_info_list_sync() -> Vec<OwnedCardInfo> {
                     index: item.index,
                     proplist: item.proplist.clone(),
                     profiles,
+                    active_profile: item
+                        .active_profile
+                        .as_ref()
+                        .and_then(|p| p.name.as_ref().map(|n| n.to_string())),
                 });
             }
         }
@@ -966,6 +973,21 @@ fn get_sink_volume_percent_by_name_sync(sink_name: &str) -> Option<u32> {
     let total: f64 = info.volume.get().iter().map(|v| v.0 as f64).sum();
     let percent = ((total / channels as f64 / Volume::NORMAL.0 as f64) * 100.0).round() as u32;
     Some(percent)
+}
+
+fn is_a2dp_profile(profile: Option<&str>) -> bool {
+    profile.is_some_and(|p| p.starts_with("a2dp-sink"))
+}
+
+async fn get_active_profile(card_index: u32) -> Option<String> {
+    tokio::task::spawn_blocking(move || {
+        get_card_info_list_sync()
+            .into_iter()
+            .find(|c| c.index == card_index)
+            .and_then(|c| c.active_profile)
+    })
+    .await
+    .unwrap_or(None)
 }
 
 fn set_card_profile_sync(card_index: u32, profile_name: &str) -> bool {
@@ -1079,4 +1101,17 @@ async fn get_sink_name_by_mac(mac: &str) -> Option<String> {
     })
         .await
         .unwrap_or(None)
+}
+#[cfg(test)]
+mod tests {
+    use super::is_a2dp_profile;
+
+    #[test]
+    fn a2dp_profiles_count_as_active() {
+        assert!(is_a2dp_profile(Some("a2dp-sink")));
+        assert!(is_a2dp_profile(Some("a2dp-sink-sbc_xq")));
+        assert!(!is_a2dp_profile(Some("off")));
+        assert!(!is_a2dp_profile(Some("headset-head-unit")));
+        assert!(!is_a2dp_profile(None));
+    }
 }
