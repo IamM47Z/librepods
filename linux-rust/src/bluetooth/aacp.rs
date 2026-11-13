@@ -696,7 +696,7 @@ impl AACPManager {
                     }
                 }
                 strings.remove(0);
-                let info = AirPodsInformation {
+                let mut info = AirPodsInformation {
                     name: strings.first().cloned().unwrap_or_default(),
                     model_number: strings.get(1).cloned().unwrap_or_default(),
                     manufacturer: strings.get(2).cloned().unwrap_or_default(),
@@ -717,6 +717,11 @@ impl AACPManager {
                 if let Some(mac) = state.airpods_mac
                     && let Some(device_data) = state.devices.get_mut(&mac.to_string())
                 {
+                    // The Information packet carries no LE keys; keep the ones the
+                    // Proximity Keys response stored, or the LE monitor can't match.
+                    if let Some(DeviceInformation::AirPods(old)) = &device_data.information {
+                        info.le_keys = old.le_keys.clone();
+                    }
                     device_data.name = info.name.clone();
                     device_data.information = Some(DeviceInformation::AirPods(info.clone()));
                 }

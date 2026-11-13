@@ -46,15 +46,26 @@ fn verify_rpa(addr: &str, irk: &[u8; 16]) -> bool {
     hash == computed_hash
 }
 
+fn load_devices() -> HashMap<String, DeviceData> {
+    std::fs::read_to_string(get_devices_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn devices_modified() -> Option<std::time::SystemTime> {
+    std::fs::metadata(get_devices_path())
+        .and_then(|m| m.modified())
+        .ok()
+}
+
 pub async fn start_le_monitor(tray_handle: Option<ksni::Handle<MyTray>>) -> bluer::Result<()> {
     let session = Session::new().await?;
     let adapter = session.default_adapter().await?;
     adapter.set_powered(true).await?;
 
-    let all_devices: HashMap<String, DeviceData> = std::fs::read_to_string(get_devices_path())
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default();
+    let mut all_devices = load_devices();
+    let mut devices_mtime = devices_modified();
 
     let mut verified_macs: HashMap<Address, String> = HashMap::new();
     let mut failed_macs: HashSet<Address> = HashSet::new();
@@ -94,9 +105,17 @@ pub async fn start_le_monitor(tray_handle: Option<ksni::Handle<MyTray>>) -> blue
 
             if let Some(airpods_mac) = verified_macs.get(&addr) {
                 matched_airpods_mac = Some(airpods_mac.clone());
-            } else if failed_macs.contains(&addr) {
-                continue;
             } else {
+                // Keys arrive after the first connection; pick them up without a restart.
+                let mtime = devices_modified();
+                if mtime != devices_mtime {
+                    devices_mtime = mtime;
+                    all_devices = load_devices();
+                    failed_macs.clear();
+                }
+                if failed_macs.contains(&addr) {
+                    continue;
+                }
                 debug!("Checking RPA for device: {}", addr_str);
                 let mut found_mac = None;
                 for (airpods_mac, device_data) in &all_devices {
@@ -246,6 +265,9 @@ pub async fn start_le_monitor(tray_handle: Option<ksni::Handle<MyTray>>) -> blue
                                                         );
                                                     }
                                                 }
+                                                // Clear on failure too, or no later attempt ever runs.
+                                                cm.remove(&real_address);
+                                            } else {
                                                 info!(
                                                     "Auto-connect is disabled for {}, not attempting to connect.",
                                                     matched_airpods_mac.as_ref().unwrap()
