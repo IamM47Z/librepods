@@ -24,6 +24,7 @@ pub struct MyTray {
     pub allow_off_option: Option<u8>,
     pub command_tx: Option<UnboundedSender<(ControlCommandIdentifiers, Vec<u8>)>>,
     pub ui_tx: Option<UnboundedSender<BluetoothUIMessage>>,
+    pub shutdown_tx: Option<UnboundedSender<()>>,
 }
 
 impl ksni::Tray for MyTray {
@@ -32,6 +33,12 @@ impl ksni::Tray for MyTray {
     }
     fn title(&self) -> String {
         "AirPods".into()
+    }
+    // Clicking the tray icon opens the window, same as the "Open Window" menu item.
+    fn activate(&mut self, _x: i32, _y: i32) {
+        if let Some(tx) = &self.ui_tx {
+            let _ = tx.send(BluetoothUIMessage::OpenWindow);
+        }
     }
     fn icon_pixmap(&self) -> Vec<Icon> {
         let text = {
@@ -105,9 +112,6 @@ impl ksni::Tray for MyTray {
             title: "Battery Status".to_string(),
             description: format!("{} {} {}", l, r, c),
         }
-    }
-    fn activate(&mut self, _x: i32, _y: i32) {
-        self.open_window();
     }
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::*;
@@ -184,7 +188,12 @@ impl ksni::Tray for MyTray {
             StandardItem {
                 label: "Exit".into(),
                 icon_name: "application-exit".into(),
-                activate: Box::new(|_| std::process::exit(0)),
+                activate: Box::new(|this: &mut Self| match &this.shutdown_tx {
+                    Some(tx) => {
+                        let _ = tx.send(());
+                    }
+                    None => std::process::exit(0),
+                }),
                 ..Default::default()
             }
             .into(),
@@ -236,7 +245,7 @@ fn generate_icon(text: &str, text_mode: bool, charging: bool) -> Icon {
                 let dy = y as f32 - center_y;
                 let dist = (dx * dx + dy * dy).sqrt();
                 if dist > inner_radius && dist <= outer_radius {
-                    img.put_pixel(x, y, Rgba([128u8, 128u8, 128u8, 255u8]));
+                    img.put_pixel(x, y, Rgba([85u8, 85u8, 85u8, 255u8]));
                 }
             }
         }
@@ -252,7 +261,7 @@ fn generate_icon(text: &str, text_mode: bool, charging: bool) -> Icon {
                     let angle_from_top =
                         (angle + std::f32::consts::PI / 2.0).rem_euclid(2.0 * std::f32::consts::PI);
                     if angle_from_top <= percentage * 2.0 * std::f32::consts::PI {
-                        img.put_pixel(x, y, Rgba([0u8, 255u8, 0u8, 255u8]));
+                        img.put_pixel(x, y, Rgba([222u8, 222u8, 222u8, 255u8]));
                     }
                 }
             }
@@ -260,7 +269,7 @@ fn generate_icon(text: &str, text_mode: bool, charging: bool) -> Icon {
         if charging {
             let emoji = "⚡";
             let scale = PxScale::from(48.0);
-            let color = Rgba([0u8, 255u8, 0u8, 255u8]);
+            let color = Rgba([222u8, 222u8, 222u8, 255u8]);
             let scaled_font = font.as_scaled(scale);
             let mut emoji_width = 0.0;
             for c in emoji.chars() {
@@ -275,7 +284,7 @@ fn generate_icon(text: &str, text_mode: bool, charging: bool) -> Icon {
         // battery text
         let scale = PxScale::from(48.0);
         let color = if charging {
-            Rgba([0u8, 255u8, 0u8, 255u8])
+            Rgba([222u8, 222u8, 222u8, 255u8])
         } else {
             Rgba([255u8, 255u8, 255u8, 255u8])
         };
@@ -329,6 +338,7 @@ mod tests {
             allow_off_option: None,
             command_tx: None,
             ui_tx: Some(ui_tx),
+            shutdown_tx: None,
         };
 
         <MyTray as ksni::Tray>::activate(&mut tray, TRAY_ACTIVATION_X, TRAY_ACTIVATION_Y);
