@@ -7,8 +7,8 @@ pkgdesc="Apple exclusive AirPods Pro features for Linux (Rust Rewrite Branch)"
 arch=('x86_64')
 url="https://github.com/kavishdevar/librepods"
 license=('AGPL-3.0-or-later')
-depends=('bluez' 'libpulse' 'dbus' 'gcc-libs' 'glibc' 'hicolor-icon-theme')
-makedepends=('git' 'rust' 'cargo')
+depends=('bluez' 'libpulse' 'dbus' 'ffmpeg' 'gcc-libs' 'glibc' 'hicolor-icon-theme')
+makedepends=('git' 'rust' 'cargo' 'clang')
 provides=('librepods')
 conflicts=('librepods' 'librepods-git')
 source=("git+https://github.com/IamM47Z/librepods.git#branch=linux/rust-maintained")
