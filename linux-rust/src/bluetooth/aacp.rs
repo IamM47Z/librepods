@@ -308,10 +308,24 @@ pub enum AACPEvent {
     StemPress(StemPressType, StemPressBudType),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AirPodsLEKeys {
     pub irk: String,
     pub enc_key: String,
+}
+
+// The keys let anyone track and decrypt the AirPods' advertisements, so logs
+// only ever see their lengths.
+impl std::fmt::Debug for AirPodsLEKeys {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AirPodsLEKeys")
+            .field("irk", &format_args!("<{} hex chars>", self.irk.len()))
+            .field(
+                "enc_key",
+                &format_args!("<{} hex chars>", self.enc_key.len()),
+            )
+            .finish()
+    }
 }
 
 pub struct AACPManagerState {
@@ -772,8 +786,8 @@ impl AACPManager {
                 for _ in 0..key_count {
                     if offset + 3 >= payload.len() {
                         error!(
-                            "Proximity Keys Response packet too short while parsing keys: {}",
-                            hex::encode(payload)
+                            "Proximity Keys Response packet too short while parsing keys ({} bytes)",
+                            payload.len()
                         );
                         return;
                     }
@@ -782,8 +796,8 @@ impl AACPManager {
                     offset += 4;
                     if offset + key_length > payload.len() {
                         error!(
-                            "Proximity Keys Response packet too short for key data: {}",
-                            hex::encode(payload)
+                            "Proximity Keys Response packet too short for key data ({} bytes)",
+                            payload.len()
                         );
                         return;
                     }
@@ -1285,4 +1299,22 @@ async fn send_thread(mut rx: mpsc::Receiver<Vec<u8>>, sp: Arc<SeqPacket>) {
         }
     }
     info!("Send thread finished.");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AirPodsLEKeys;
+
+    #[test]
+    fn le_keys_debug_hides_key_material() {
+        let keys = AirPodsLEKeys {
+            irk: "00112233445566778899aabbccddeeff".to_string(),
+            enc_key: "ffeeddccbbaa99887766554433221100".to_string(),
+        };
+        let shown = format!("{:?}", keys);
+        assert!(
+            !shown.contains("00112233") && !shown.contains("ffeeddcc"),
+            "{shown}"
+        );
+    }
 }
