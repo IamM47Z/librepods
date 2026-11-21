@@ -11,7 +11,7 @@ depends=('bluez' 'libpulse' 'dbus' 'gcc-libs' 'glibc' 'hicolor-icon-theme')
 makedepends=('git' 'rust' 'cargo')
 provides=('librepods')
 conflicts=('librepods' 'librepods-git')
-source=("git+https://github.com/IamM47Z/librepods.git#branch=fix/a2dp-profile-recovery")
+source=("git+https://github.com/IamM47Z/librepods.git#branch=linux/rust-maintained")
 sha256sums=('SKIP')
 
 pkgver() {
