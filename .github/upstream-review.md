@@ -21,15 +21,18 @@ When the issue lists no items above "Waiting", stop: change nothing and open no 
 1. Read the PR description and the full diff of `linux-rust/`. Never judge from the title. A large PR gets its commits read one by one, to find self-contained fixes.
 2. Judge: what it changes, whether it fixes something this setup hits, risk (size, quality, unrelated files, new dependencies, CI or workflow changes, network calls, binaries, author behaviour), and overlap with what is already merged. Skip CI and dependency changes and anything trust-relevant.
 3. Verdict: `merge`, `partial` (name the commits), `waiting` (with what it waits for) or `skipped`, each with one reason.
-4. For a PR with new commits that was already merged, merge its new head again.
+4. For a PR with new commits that was already merged, squash only its new commits, as a second commit for that PR.
 5. New commits on `linux/rust` itself are merged as one merge commit.
 
 ## Applying
 
 - Work on a branch `upstream-review/<date>` from `linux/rust-maintained`.
-- One merge commit per upstream PR: `git fetch https://github.com/librepods-org/librepods.git pull/<n>/head`, then `git merge --no-ff -m "Merge upstream PR #<n>: <title>" FETCH_HEAD`. Cherry-pick with `-x` for partial verdicts.
+- One squash commit per upstream PR, no merge commits: `git fetch https://github.com/librepods-org/librepods.git pull/<n>/head`, then `git merge --squash FETCH_HEAD`.
+  - Commit it as `<PR title> (#<n>)`, with `--author` set to the PR's opener and `--date` to its head commit's date.
+  - Its body is `Squash of upstream PR <url> at <head sha>.`, plus `Conflicts with this branch resolved by <you>.` when you resolved any, then a `Co-authored-by:` line for every other commit author in the PR.
+  - A partial verdict is one commit too, by the author of the picked commits, titled `<summary> (#<n>, partial)`, its body listing the upstream commits it takes.
 - Resolve small conflicts yourself, keeping both sides' intent. Explain each resolution in the pull request body.
-- When an upstream PR has a real bug, fix it in its own commit after the merge, and draft a comment for that upstream PR in the pull request body. Do not post it.
+- When an upstream PR has a real bug, fix it in its own commit right after that PR's squash, with a `Follow-up to upstream PR #<n>.` line in the body, and draft a comment for that upstream PR in the pull request body. Do not post it.
 - Update `.github/upstream-prs.tsv`: the PR's current head commit, the verdict and the reason, for every item you judged, skips included.
 - In `linux-rust/`, run `cargo build --release --locked` and `cargo test --release --locked`. Both must pass. When they do not and you cannot fix it, drop that item, set it to `waiting` with the error, and say so.
 
