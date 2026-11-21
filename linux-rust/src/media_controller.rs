@@ -1300,8 +1300,14 @@ fn ear_actions(
             a.deactivate_a2dp = audio_off_when_not_wearing;
         }
     } else if old_in == 0 {
-        a.activate_a2dp = true;
-        a.resume = !first_report;
+        // The first reading is the state at connect, not a bud going in. Acting
+        // on it would grab audio before AudioSource says whether another
+        // device holds it, and forces an A2DP wait (and a WirePlumber restart)
+        // while BlueZ is still setting the card up.
+        if !first_report {
+            a.activate_a2dp = true;
+            a.resume = true;
+        }
     } else if new_in < old_in {
         a.pause = pause_when_one_removed;
     } else if new_in > old_in {
@@ -1351,8 +1357,10 @@ mod tests {
 
     #[test]
     fn first_report_after_connect() {
+        // The first reading is the state at connect, not the user putting a
+        // bud in: it must not switch audio here.
         let a = ear_actions(&[], &BOTH, true, false);
-        assert!(a.activate_a2dp && !a.resume);
+        assert_eq!(a, EarActions::default());
         let a = ear_actions(&[], &NONE, true, false);
         assert!(a.deactivate_a2dp && !a.pause);
     }
