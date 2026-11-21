@@ -1239,7 +1239,12 @@ async fn recv_thread(manager: AACPManager, sp: Arc<SeqPacket>) {
             }
             Ok(n) => {
                 let data = &buf[..n];
-                debug!("Received {} bytes: {}", n, hex::encode(data));
+                // The proximity keys response carries the IRK and encryption key.
+                if data.get(4) == Some(&opcodes::PROXIMITY_KEYS_RSP) {
+                    debug!("Received {} bytes: <proximity keys redacted>", n);
+                } else {
+                    debug!("Received {} bytes: {}", n, hex::encode(data));
+                }
                 manager.receive_packet(data).await;
             }
             Err(e) => {

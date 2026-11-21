@@ -125,10 +125,7 @@ pub async fn start_le_monitor(tray_handle: Option<ksni::Handle<MyTray>>) -> blue
                         && irk_bytes.len() == 16
                     {
                         let irk: [u8; 16] = irk_bytes.as_slice().try_into().unwrap();
-                        debug!(
-                            "Verifying RPA {} for airpods MAC {} with IRK {}",
-                            addr_str, airpods_mac, info.le_keys.irk
-                        );
+                        debug!("Verifying RPA {} for airpods MAC {}", addr_str, airpods_mac);
                         if verify_rpa(&addr_str, &irk) {
                             info!(
                                 "Matched our device ({}) with the irk for {}",
