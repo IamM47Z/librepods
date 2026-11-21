@@ -71,7 +71,8 @@ struct MediaControllerState {
     last_takeover: Option<std::time::Instant>,
     /// The AirPods disconnected: delayed work for this connection must not act
     /// any more (a new connection has its own controller).
-    connection_ended: bool,    /// We paused the local players (ownership lost): their own resume
+    connection_ended: bool,
+    /// We paused the local players (ownership lost): their own resume
     /// afterwards is not the user starting playback.
     i_paused_the_media: bool,
 }
@@ -608,10 +609,6 @@ impl MediaController {
     pub async fn pause_all_media(&self) {
         debug!("Pausing all media (without tracking for resume)");
 
-        // Remember that the pause came from us, so the playback listener does
-        // not mistake the players coming back for the user starting something.
-        self.state.lock().await.i_paused_the_media = true;
-
         let paused_count = tokio::task::spawn_blocking(|| {
             let conn = match Connection::new_session() {
                 Ok(c) => c,
@@ -648,7 +645,14 @@ impl MediaController {
 
         if paused_count > 0 {
             info!("Paused {} media player(s) due to ownership loss", paused_count);
-            self.state.lock().await.is_playing = false;
+            let mut state = self.state.lock().await;
+            state.is_playing = false;
+            // Remember that the pause came from us, so the playback listener
+            // does not mistake the players coming back for the user starting
+            // something. Only when something was paused: the listener clears
+            // the flag on the next resume, so a stale one would swallow a real
+            // play.
+            state.i_paused_the_media = true;
         } else {
             debug!("No playing media players found to pause");
         }
