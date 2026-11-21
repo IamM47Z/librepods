@@ -46,11 +46,10 @@ fn verify_rpa(addr: &str, irk: &[u8; 16]) -> bool {
     hash == computed_hash
 }
 
-fn load_devices() -> HashMap<String, DeviceData> {
-    std::fs::read_to_string(get_devices_path())
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+// None on a failed read or parse, e.g. mid-write, so the caller keeps its copy.
+fn load_devices() -> Option<HashMap<String, DeviceData>> {
+    let json = std::fs::read_to_string(get_devices_path()).ok()?;
+    serde_json::from_str(&json).ok()
 }
 
 fn devices_modified() -> Option<std::time::SystemTime> {
@@ -64,7 +63,7 @@ pub async fn start_le_monitor(tray_handle: Option<ksni::Handle<MyTray>>) -> blue
     let adapter = session.default_adapter().await?;
     adapter.set_powered(true).await?;
 
-    let mut all_devices = load_devices();
+    let mut all_devices = load_devices().unwrap_or_default();
     let mut devices_mtime = devices_modified();
 
     let mut verified_macs: HashMap<Address, String> = HashMap::new();
@@ -106,11 +105,13 @@ pub async fn start_le_monitor(tray_handle: Option<ksni::Handle<MyTray>>) -> blue
             if let Some(airpods_mac) = verified_macs.get(&addr) {
                 matched_airpods_mac = Some(airpods_mac.clone());
             } else {
-                // Keys arrive after the first connection; pick them up without a restart.
+                // LE keys are saved after the monitor starts, so reload devices.json when it changes.
                 let mtime = devices_modified();
-                if mtime != devices_mtime {
+                if mtime != devices_mtime
+                    && let Some(devices) = load_devices()
+                {
                     devices_mtime = mtime;
-                    all_devices = load_devices();
+                    all_devices = devices;
                     failed_macs.clear();
                 }
                 if failed_macs.contains(&addr) {
