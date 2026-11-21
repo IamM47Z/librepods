@@ -37,12 +37,13 @@ pub fn get_app_settings_path() -> PathBuf {
     let old_path = PathBuf::from(&data_dir)
         .join("app_settings.json");
 
+    // Callers write here with fs::write, which fails silently without the folder.
+    if let Some(parent) = new_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
     // migrate if needed
     if old_path.exists() && !new_path.exists() {
-        if let Some(parent) = new_path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-
         if std::fs::copy(&old_path, &new_path).is_ok() {
             let _ = std::fs::remove_file(&old_path);
         }
