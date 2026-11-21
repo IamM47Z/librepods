@@ -1,6 +1,8 @@
 # Maintainer of the AUR recipe this copies: Mingxun Hua
 # Built from the IamM47Z fork; paru prefers this over the AUR package.
 pkgname=librepods-rust-git
+# The history was squashed on 2026-11-21, which lowered the commit count.
+epoch=1
 pkgver=r527.672e65ad
 pkgrel=1
 pkgdesc="Apple exclusive AirPods Pro features for Linux (Rust Rewrite Branch)"
