@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "17 6 * * *"
   workflow_dispatch:
+    inputs:
+      review:
+        description: "Run the reviewer even when nothing changed"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -14,11 +19,46 @@ jobs:
     permissions:
       contents: read
       issues: write
+    outputs:
+      review: ${{ steps.watch.outputs.review }}
+      issue: ${{ steps.watch.outputs.issue }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - run: bash .github/upstream-watch.sh
+      - id: watch
+        run: bash .github/upstream-watch.sh
         env:
           GH_TOKEN: ${{ github.token }}
 
+  review:
+    needs: watch
+    if: needs.watch.outputs.review == 'true' || inputs.review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libdbus-1-dev libpulse-dev
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+      - uses: anthropics/claude-code-action@acfe7992852970efb4fee683d63d628e3e52df67 # v1
+        with:
+          # A Claude subscription token from `claude setup-token`.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          claude_args: >-
+            --model claude-sonnet-5-5
+            --allowedTools "Read,Edit,Write,Grep,Glob,Bash(git:*),Bash(gh:*),Bash(cargo:*),Bash(date:*)"
+          prompt: |
+            Follow .github/upstream-review.md. The items to review are in the body of
+            issue #${{ needs.watch.outputs.issue }} in ${{ github.repository }}: every section
+            above "Waiting". Upstream is librepods-org/librepods, base branch linux/rust.
