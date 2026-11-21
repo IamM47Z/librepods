@@ -7,6 +7,13 @@ You review the upstream items the watcher listed in the "Upstream to review" iss
 - This fork is `librepods-org/librepods` branch `linux/rust`, plus merged upstream PRs and small fixes, built daily on Arch, Hyprland, PipeWire with pipewire-pulse, BlueZ, AirPods. It is packaged with cargo from `linux-rust/`.
 - `.github/upstream-prs.tsv` holds one verdict per upstream PR: `merged`, `partial`, `skipped`, `waiting`, `upstream` or `closed`, with the head commit it was judged at and one reason. Read the rows of earlier verdicts before judging; do not reverse one without a new reason.
 
+## Rules
+
+- Never use GitHub "Sync fork" or `gh repo sync` on `linux/rust-maintained`. Upstream work arrives only through this review.
+- Never open a pull request upstream that bundles other people's work. Reach the maintainer through upstream PR #241.
+- Keep changes generic, never specific to one machine or AirPods model.
+- The Arch package stays `librepods-rust-git`, in `packaging/librepods-rust-git/`.
+
 When the issue lists no items above "Waiting", stop: change nothing and open no pull request.
 
 ## For each item
