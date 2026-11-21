@@ -37,4 +37,4 @@ pr	head	verdict	reason
 928	dcbb3ee3426843fa219c86374ddfc77eb57a85a4	merged	in linux/rust-maintained
 929	78171f66237ba0fc01d1eda01dd0c48830a7a29f	merged	in linux/rust-maintained
 934	27de0a9f4209c531ad554d550d26bab09aa59c7b	partial	packet bounds checks and key redaction copied; rest is COSMIC/UI/deps in mixed commits
-936	670a4ea8102f96c74c9b4fce03e8fc765aa06646	merged	in linux/rust-maintained
+936	670a4ea8102f96c74c9b4fce03e8fc765aa06646	merged	own PR, closed upstream; kept in linux/rust-maintained
